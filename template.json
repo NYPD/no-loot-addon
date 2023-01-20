@@ -1,0 +1,39 @@
+{
+  "Stockade Prio List": {
+    "Silk Cloth": [
+      {
+        "priority": 1,
+        "players": [
+          {
+            "playerName": "Nyfd",
+            "has": false
+          },
+          {
+            "playerName": "Danage",
+            "has": false
+          }
+        ]
+      }
+    ],
+    "Rock Maul": [
+      {
+        "priority": 1,
+        "players": [
+          {
+            "playerName": "Nyfd",
+            "has": false
+          }
+        ]
+      },
+      {
+        "priority": 2,
+        "players": [
+          {
+            "playerName": "Danage",
+            "has": false
+          }
+        ]
+      }
+    ]
+  }
+}
