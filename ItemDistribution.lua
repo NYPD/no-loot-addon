@@ -1,14 +1,4 @@
-local AceConfig = LibStub("AceConfig-3.0")
-local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
-local AceGUI = LibStub("AceGUI-3.0")
-local NoLootConfiguration = LibStub("AceAddon-3.0"):GetAddon("NoLootConfiguration")
-
 local ItemDistribution = LibStub("AceAddon-3.0"):NewAddon("ItemDistribution", "AceConsole-3.0", "AceEvent-3.0")
-
--- local frame = AceGUI:Create("Frame")
--- frame:SetTitle("Example Frame")
--- frame:SetStatusText("AceGUI-3.0 Example Container Frame")
 
 function ItemDistribution:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("NoLootDB")
@@ -31,12 +21,30 @@ function ItemDistribution:ITEM_PUSH(eventName, bagSlot, iconFileID)
   -- print(iconFileID)
 end
 
-function ItemDistribution:CHAT_MSG_LOOT(eventName, text, playerName)
-  local lootName = string.match(text, '%[(.*)%]')
+function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
 
-  if self.lootDistributionList[lootName] then
-    local priorityLevel = 1 -- get the actual priorityLevel
-    self:openItemChooser(lootName, priorityLevel)
+  local lootName = nil
+
+  if NoLootUtil:isEmpty(text) then
+    lootName = self.previousLootName
+  else
+    lootName = string.match(text, '%[(.*)%]')
+  end
+
+  if NoLootUtil:isEmpty(lootName) then
+    print("No loot item name to process")
+    return
+  end
+
+  local activeLootList = self.db.profile.activeLootList
+  local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
+
+  if lootDistributionList[lootName] then
+    local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootDistributionList[lootName])
+    self.previousLootName = lootName
+    self:openItemChooser(lootName, playersToRoll, priorityToRoll)
+  else
+    print(lootName .. " is not in the current loot list")
   end
 
 end
@@ -45,30 +53,25 @@ function ItemDistribution:updateActiveLootList(activeLootList)
   self.activeLootList = activeLootList
 end
 
-function ItemDistribution:openItemChooser(lootName, priorityLevel)
-  -- local frame = AceGUI:Create("Frame")
-  -- frame:SetTitle("No Loot")
-  -- frame:SetStatusText("Wool Cloth [Priority 1]")
-  -- frame:SetWidth(200)
-  -- frame:SetHeight(50)
-  -- frame:SetCallback("OnClose", function(widget) AceGUI:Release(widget) end)
-  -- frame:SetResizable(false)
+function ItemDistribution:openItemChooser(lootName, playerNames, priorityLevel)
 
-  local framePoint = self.db.profile.framePoint;
-  local frameRelativeTo = self.db.profile.frameRelativeTo;
-  local frameRelativePoint = self.db.profile.frameRelativePoint;
-  local frameOffsetX = self.db.profile.frameOffsetX;
-  local frameOffsetY = self.db.profile.frameOffsetY;
+  -- Frame is open, dont open another one
+  if self.isOpen then return end
 
+  --------------------------------- Main Frame ---------------------------------
   local mainFrame = CreateFrame("Frame", "LootDistribution", UIParent, "BackdropTemplate")
 
-  if(framePoint == nil) then
+  if (self.db.profile.framePoint == nil) then
     mainFrame:SetPoint("TOPLEFT")
   else
-    mainFrame:SetPoint(framePoint, frameRelativeTo, frameRelativePoint, frameOffsetX, frameOffsetY)
+    mainFrame:SetPoint(self.db.profile.framePoint,
+                       self.db.profile.frameRelativeTo,
+                       self.db.profile.frameRelativePoint,
+                       self.db.profile.frameOffsetX,
+                       self.db.profile.frameOffsetY)
   end
 
-  mainFrame:SetSize(180, 100)
+  mainFrame:SetWidth(180)
   mainFrame:SetBackdrop({
     bgFile = "Interface/Tooltips/UI-Tooltip-Background",
     edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -92,34 +95,54 @@ function ItemDistribution:openItemChooser(lootName, priorityLevel)
     ItemDistribution.db.profile.frameOffsetY = offsetY;
   end)
 
-  -- Loot Name
-  local title = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-  title:SetPoint("TOPLEFT", 7, -10)
-  title:SetText(lootName .. " [Priority: " .. priorityLevel .. "]")
+  --------------------------------- Loot Name ----------------------------------
+  if priorityLevel ~= nil then
+    local title = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 7, -10)
 
-  -- Close button
+    local frameTitle = lootName
+    local lootNameStringLength = string.len(frameTitle)
+    if lootNameStringLength > 15 then
+      frameTitle = string.sub(frameTitle, 1, 13) .. "..."
+    end
+
+    title:SetText(frameTitle .. " [Prio: " .. priorityLevel .. "]")
+  end
+
+  -------------------------------- Close button --------------------------------
   local closeButton = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
   closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 0 , 0)
   closeButton:SetScript("OnClick", function()
     mainFrame:Hide()
+    ItemDistribution.isOpen = false
   end)
 
-  -- Item Icon
+  --------------------------------- Item Icon ---------------------------------
   local _, lootNameItemLink = GetItemInfo(lootName)
-  local bag, slot = GetBagPosition(lootNameItemLink)
+  local bag, slot = NoLootUtil:GetBagPosition(lootNameItemLink)
   local itemLocation = ItemLocation:CreateFromBagAndSlot(bag, slot)
+
+  try(function()
+    C_Item.DoesItemExist(itemLocation)
+  end, function(e)
+    print("item location invalid")
+    print("bag: " .. bag)
+    print("slot: " .. slot)
+  end)
+
   local itemID = C_Item.GetItemID(itemLocation)
   local fileDataID = C_Item.GetItemIcon(itemLocation)
- 
 
   local itemIcon = CreateFrame("Frame", nil, mainFrame)
-  itemIcon:SetPoint("CENTER", -55, -5)
+  itemIcon:SetPoint("CENTER", -55, -10)
   itemIcon:SetSize(50, 50)
   itemIcon.tex = itemIcon:CreateTexture()
   itemIcon.tex:SetAllPoints(itemIcon)
   itemIcon.tex:SetTexture(fileDataID)
   itemIcon:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(mainFrame, "ANCHOR_TOP")
+    --GameTooltip:SetOwner(mainFrame, "ANCHOR_TOP")
+    -- How do I change the tooltip anchor froum mouse?
+    GameTooltip:SetOwner(mainFrame, "ANCHOR_CURSOR", 0, 0)
     GameTooltip:SetHyperlink("item:" .. itemID .. ":0:0:0:0:0:0:0")
     GameTooltip:Show()
   end)
@@ -127,24 +150,62 @@ function ItemDistribution:openItemChooser(lootName, priorityLevel)
     GameTooltip:Hide()
   end)
 
+  -------------------------------- Player Button -------------------------------
+  if priorityLevel == nil then
+    local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    openRollString:SetPoint("TOP", 25, -40)
+    openRollString:SetText("Open Roll!")
+    mainFrame:SetHeight(85)
+  else
+    local yPosition = -30
+    local playerNamesCount = 0
+    for _, playerName in ipairs(playerNames) do
+      local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+      playerButton.playerName = playerName
+      playerButton:SetPoint("TOP", mainFrame, 25, yPosition)
+      playerButton:SetSize(100, 20)
+      playerButton:SetText(playerName)
+      playerButton:SetScript("OnClick", function(self, button)
+        ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, self.playerName)
+        ItemDistribution.isOpen = false
+        mainFrame:Hide()
+      end)
 
-  -- local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-  -- playerButton:SetPoint("TOP", mainFrame, 25 -25)
-  -- playerButton:SetSize(100, 20)
-  -- playerButton:SetText("Nyfdasdflpks")
-  -- playerButton:SetScript("OnClick", function(self, button)
-  --   print("You clicked me with " .. button)
-  -- end)
+      yPosition = yPosition - 20
+      playerNamesCount = playerNamesCount + 1
+    end
 
-  local playerButton2 = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-  playerButton2:SetPoint("TOP", mainFrame, 25, -25)
-  playerButton2:SetSize(100, 20)
-  playerButton2:SetText("Danage")
-  playerButton2:SetScript("OnClick", function(self, button)
-    print("You clicked me with " .. button)
-  end)
+    local heightToAdd = 0
+    if playerNamesCount > 2 then
+      heightToAdd = (playerNamesCount - 2) * 20
+    end
+    mainFrame:SetHeight(85 + heightToAdd - 5)
+  end
+
+  self.isOpen = true
+
 end
 
+function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, playerName)
+
+  local activeLootList = self.db.profile.activeLootList
+  local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
+  local lootPriorities = lootDistributionList[lootName]
+
+  for key, lootPriority in pairs(lootPriorities) do
+    local priority = lootPriority["priority"]
+    if priority == priorityLevel then
+      for key, player in pairs(lootPriority["players"]) do
+        if playerName == player["playerName"] then
+          player["has"] = true
+          break
+        end
+      end
+      break
+    end
+  end
+
+end
 --Left and rigjt lines
 -- local left = mainFrame:CreateTexture(nil, "BACKGROUND")
 -- left:SetHeight(8)

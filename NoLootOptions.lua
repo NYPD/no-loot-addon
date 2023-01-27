@@ -154,7 +154,8 @@ function NoLootOptions:GetNewLootListValue(info)
     return self.newLootListValue
   else
     local activeLootListValue = self.db.profile.lootDistributionList[self.db.profile.activeLootList]
-    return JSON.stringify(activeLootListValue)
+    local stringifiedJson = JSON.stringify(activeLootListValue)
+    return stringifiedJson == "null" and "" or stringifiedJson
   end
 end
 function NoLootOptions:SetNewLootListValue(info, value)
@@ -179,25 +180,16 @@ end
 function NoLootOptions:SaveLootList(info)
 
   local lootListName = self:GetNewLootListName()
-  local newLootListValue = self.newLootListValue
-  local parsedJson = JSON.parse(newLootListValue)
+  local lootListValue= self:GetNewLootListValue()
+  local lootListTable = nil
 
+  if type(lootListValue) == "string" then
+    lootListTable = JSON.parse(lootListValue)
+  else
+    lootListTable = lootListValue
+  end
 
-  -- print(parsedJson["Silk Cloth"])
-  -- print(parsedJson["Silk Clotwwh"])
-
-  -- for key, value in pairs(parsedJson) do
-  --    print("Loot distribution item: " .. key)
-  --     for key, value2 in pairs(value) do
-  --     print("priority level: " .. value2["priority"])
-  --     for key, value3 in pairs(value2["players"]) do
-  --       print("playerName : " .. value3["playerName"])
-  --       print("has : " .. tostring(value3["has"]))
-  --     end
-  --   end
-  -- end
-
-  self.db.profile.lootDistributionList[lootListName] = parsedJson
+  self.db.profile.lootDistributionList[lootListName] = lootListTable
 
   if self.db.profile.activeLootList ~= self.newLootListName then
     self.newLootListName = ""
@@ -210,7 +202,7 @@ function NoLootOptions:CheckSaveLootListDisabled(info, value)
   local lootListName = self:GetNewLootListName()
   local lootListValue = self:GetNewLootListValue()
 
-  if isEmpty(lootListName) or isEmpty(lootListValue) then
+  if NoLootUtil:isEmpty(lootListName) or NoLootUtil:isEmpty(lootListValue) then
     return true
   end
 
