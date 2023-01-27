@@ -10,15 +10,33 @@ function ItemDistribution:OnEnable()
   -- Do more initialization here, that really enables the use of your addon.
   -- Register Events, Hook functions, Create Frames, Get information from
   -- the game that wasn't available in OnInitialize
-  self:RegisterEvent("ITEM_PUSH")
   self:RegisterEvent("CHAT_MSG_LOOT")
+  --self:RegisterEvent("ITEM_PUSH")
+  self:RegisterEvent("UNIT_INVENTORY_CHANGED")
+  
 
 end
 
-function ItemDistribution:ITEM_PUSH(eventName, bagSlot, iconFileID)
-  -- print(eventName)
-  -- print(bagSlot)
-  -- print(iconFileID)
+-- function ItemDistribution:ITEM_PUSH(eventName, bagSlot, iconFileID)
+--   print(eventName)
+--   print(bagSlot)
+--   print(iconFileID)
+-- end
+
+function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, itemLink)
+  local isPlayer = unitTarget == "player"
+  if isPlayer then
+    if self.chatMessageLootName ~= nil then
+      local activeLootList = self.db.profile.activeLootList
+      local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
+      local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootDistributionList[self.chatMessageLootName])
+
+      self.previousLootName = self.chatMessageLootName
+      self:openItemChooser(self.chatMessageLootName, itemLink, playersToRoll, priorityToRoll)
+      self.chatMessageLootName = nil
+    end
+  end
+
 end
 
 function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
@@ -31,29 +49,56 @@ function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
     lootName = string.match(text, '%[(.*)%]')
   end
 
-  if NoLootUtil:isEmpty(lootName) then
-    print("No loot item name to process")
-    return
+  if self:isLootInActiveLootList(lootName) then
+    self.chatMessageLootName = lootName
   end
+
+end
+
+function ItemDistribution:isLootInActiveLootList(lootName)
 
   local activeLootList = self.db.profile.activeLootList
   local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
 
+  -- Loot exists in the active loot list!
   if lootDistributionList[lootName] then
-    local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootDistributionList[lootName])
-    self.previousLootName = lootName
-    self:openItemChooser(lootName, playersToRoll, priorityToRoll)
+    return true
   else
-    print(lootName .. " is not in the current loot list")
+    return false
   end
 
 end
 
-function ItemDistribution:updateActiveLootList(activeLootList)
-  self.activeLootList = activeLootList
+function ItemDistribution:manualProcess(lootName)
+
+  if lootName == nil then lootName = self.previousLootName end
+  local noPreviousLoot = self.previousLootName == nil
+
+  if noPreviousLoot and lootName == nil then
+    print("No Previous loot to process")
+    return false
+  end
+
+  local itemLink = nil
+  local isItemLink = NoLootUtil:isItemLink(lootName)
+  if isItemLink then
+    itemLink = lootName
+    lootName = string.match(lootName, '%[(.*)%]')
+  end
+
+  if self:isLootInActiveLootList(lootName) then
+    local fakeChatMessageLoot = "[" .. lootName .. "]"
+    self:CHAT_MSG_LOOT("CHAT_MSG_LOOT", fakeChatMessageLoot)
+    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", itemLink)
+    return true
+  else
+    print(lootName .. " not found in active loot list")
+    return false
+  end
+  
 end
 
-function ItemDistribution:openItemChooser(lootName, playerNames, priorityLevel)
+function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, priorityLevel)
 
   -- Frame is open, dont open another one
   if self.isOpen then return end
@@ -118,37 +163,51 @@ function ItemDistribution:openItemChooser(lootName, playerNames, priorityLevel)
   end)
 
   --------------------------------- Item Icon ---------------------------------
-  local _, lootNameItemLink = GetItemInfo(lootName)
-  local bag, slot = NoLootUtil:GetBagPosition(lootNameItemLink)
-  local itemLocation = ItemLocation:CreateFromBagAndSlot(bag, slot)
+  local bag, slot = NoLootUtil:GetBagPositionForItemName(lootName)
 
-  try(function()
-    C_Item.DoesItemExist(itemLocation)
-  end, function(e)
-    print("item location invalid")
-    print("bag: " .. bag)
-    print("slot: " .. slot)
-  end)
+  local item
 
-  local itemID = C_Item.GetItemID(itemLocation)
-  local fileDataID = C_Item.GetItemIcon(itemLocation)
+  if itemLink ~= nil then
+    item = Item:CreateFromItemLink(itemLink)
+  else
+    item = Item:CreateFromBagAndSlot(bag, slot)
+  end
 
-  local itemIcon = CreateFrame("Frame", nil, mainFrame)
-  itemIcon:SetPoint("CENTER", -55, -10)
-  itemIcon:SetSize(50, 50)
-  itemIcon.tex = itemIcon:CreateTexture()
-  itemIcon.tex:SetAllPoints(itemIcon)
-  itemIcon.tex:SetTexture(fileDataID)
-  itemIcon:SetScript("OnEnter", function(self)
-    --GameTooltip:SetOwner(mainFrame, "ANCHOR_TOP")
-    -- How do I change the tooltip anchor froum mouse?
-    GameTooltip:SetOwner(mainFrame, "ANCHOR_CURSOR", 0, 0)
-    GameTooltip:SetHyperlink("item:" .. itemID .. ":0:0:0:0:0:0:0")
-    GameTooltip:Show()
-  end)
-  itemIcon:SetScript("OnLeave", function(self)
-    GameTooltip:Hide()
-  end)
+  --TODO this shit wont work
+  if item:IsItemEmpty() then
+    --GetItemInfoDelayed(lootName)
+    -- local _, lootNameItemLink = GetItemInfo(lootName)
+    -- item = Item:CreateFromItemLink(lootNameItemLink)
+    print("No icon to show since item is not cached")
+  else
+    item:ContinueOnItemLoad(function()
+      local itemID = item:GetItemID()
+      local name = item:GetItemName()
+      local icon = item:GetItemIcon()
+
+      -- local itemLocation = ItemLocation:CreateFromBagAndSlot(bag, slot)
+      -- local itemID = C_Item.GetItemID(itemLocation)
+      -- local fileDataID = C_Item.GetItemIcon(itemLocation)
+
+      local itemIcon = CreateFrame("Frame", nil, mainFrame)
+      itemIcon:SetPoint("CENTER", -55, -10)
+      itemIcon:SetSize(50, 50)
+      itemIcon.tex = itemIcon:CreateTexture()
+      itemIcon.tex:SetAllPoints(itemIcon)
+      itemIcon.tex:SetTexture(icon)
+      itemIcon:SetScript("OnEnter", function(self)
+        --GameTooltip:SetOwner(mainFrame, "ANCHOR_TOP")
+        -- How do I change the tooltip anchor froum mouse?
+        GameTooltip:SetOwner(mainFrame, "ANCHOR_CURSOR", 0, 0)
+        GameTooltip:SetHyperlink("item:" .. itemID .. ":0:0:0:0:0:0:0")
+        GameTooltip:Show()
+      end)
+      itemIcon:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+      end)
+
+    end)
+  end
 
   -------------------------------- Player Button -------------------------------
   if priorityLevel == nil then

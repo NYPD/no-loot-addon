@@ -38,12 +38,29 @@ function NoLootConfiguration:SlashCommand(arg)
   local isPrev = arg == "prev" or arg == "p"
 
   if isPrev then
-    ItemDistribution:CHAT_MSG_LOOT("CHAT_MSG_LOOT", nil)
+    ItemDistribution:manualProcess(nil)
   else
-    local inputNoBrackets = string.match(arg, '%[(.*)%]') --arg:gsub("[%[%]]", "")
-    if inputNoBrackets == nil then inputNoBrackets = arg end
-    ItemDistribution:CHAT_MSG_LOOT("CHAT_MSG_LOOT", ("[" .. inputNoBrackets .. "]"))
+
+    local argNoBrackets = string.match(arg, '%[(.*)%]')
+    if argNoBrackets == nil then argNoBrackets = arg end
+
+    local itemId = tonumber(arg)
+    local isItemId = itemId ~= nil
+
+    if isItemId then
+      local item = Item:CreateFromItemID(itemId)
+      item:ContinueOnItemLoad(function()
+          ItemDistribution:manualProcess(item:GetItemLink())
+      end)
+      return
+    end
+
+    if NoLootUtil:isItemLink(arg) then
+      ItemDistribution:manualProcess(arg)
+    else
+      ItemDistribution:manualProcess(argNoBrackets)
+    end
+
   end
- 
 end
 
