@@ -16,4 +16,5 @@ Libs\JsonParser\JsonParser.lua
 
 NoLootUtil.lua
 NoLootOptions.lua
-AddOnConfiguration.lua
+NoLootConfiguration.lua
+ItemDistribution.Lua

@@ -29,3 +29,24 @@ function try(f, catch_f)
     catch_f(exception)
   end
 end
+
+function isEmpty(string)
+  return string == nil or string == ""
+end
+
+function GetBagPosition(itemLink)
+  for bag = 0, NUM_BAG_SLOTS do
+    for slot = 1, C_Container.GetContainerNumSlots(bag) do
+      if (C_Container.GetContainerItemLink(bag, slot) == itemLink) then
+        return bag, slot
+      end
+    end
+  end
+end
+
+-- Get bag position of the Hearthstone
+-- local _, itemLink = GetItemInfo(6948)
+-- local bag, slot = GetBagPosition(itemLink)
+-- print("bag: " .. bag)
+-- print("slot: " .. slot)
+-- print(C_Item.GetItemID(ItemLocation:CreateFromBagAndSlot(bag, slot)))

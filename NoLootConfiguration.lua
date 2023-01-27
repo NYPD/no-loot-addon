@@ -9,9 +9,9 @@ local defaults = {
   },
 }
 
-local NoLoot = LibStub("AceAddon-3.0"):NewAddon("NoLoot", "AceConsole-3.0", "AceEvent-3.0")
+local NoLootConfiguration = LibStub("AceAddon-3.0"):NewAddon("NoLootConfiguration", "AceConsole-3.0", "AceEvent-3.0")
 
-function NoLoot:OnInitialize()
+function NoLootConfiguration:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("NoLootDB", defaults, true)
 
   local NoLootOptions = NoLootOptions:getInstance(self.db)
@@ -25,7 +25,7 @@ function NoLoot:OnInitialize()
   self:RegisterChatCommand("noloot", "SlashCommand")
   self:RegisterChatCommand("cum", "SlashCommand")
 end
-function NoLoot:SlashCommand()
+function NoLootConfiguration:SlashCommand()
   -- https://github.com/Stanzilla/WoWUIBugs/issues/89
   InterfaceOptionsFrame_OpenToCategory(self.optionsFrame)
   InterfaceOptionsFrame_OpenToCategory(self.optionsFrame)
