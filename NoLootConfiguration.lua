@@ -36,9 +36,12 @@ function NoLootConfiguration:SlashCommand(arg)
   end
 
   local isPrev = arg == "prev" or arg == "p"
+  local isClear = arg == "clear"
 
   if isPrev then
     ItemDistribution:manualProcess(nil)
+  elseif isClear then
+    ItemDistribution:clearTempVariables()
   else
 
     local argNoBrackets = string.match(arg, '%[(.*)%]')

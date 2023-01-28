@@ -2,39 +2,31 @@ local ItemDistribution = LibStub("AceAddon-3.0"):NewAddon("ItemDistribution", "A
 
 function ItemDistribution:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("NoLootDB")
-  self.activeLootList = self.db.profile.activeLootList
-  self.lootDistributionList = self.db.profile.lootDistributionList[self.activeLootList]
+  self.currentLootItem = nil
+  self.itemsToDistribute = {}
 end
 
 function ItemDistribution:OnEnable()
-  -- Do more initialization here, that really enables the use of your addon.
-  -- Register Events, Hook functions, Create Frames, Get information from
-  -- the game that wasn't available in OnInitialize
   self:RegisterEvent("CHAT_MSG_LOOT")
-  --self:RegisterEvent("ITEM_PUSH")
   self:RegisterEvent("UNIT_INVENTORY_CHANGED")
-  
-
 end
 
--- function ItemDistribution:ITEM_PUSH(eventName, bagSlot, iconFileID)
---   print(eventName)
---   print(bagSlot)
---   print(iconFileID)
--- end
+function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, itemLink, startingPriority, reverse)
 
-function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, itemLink)
   local isPlayer = unitTarget == "player"
-  if isPlayer then
-    if self.chatMessageLootName ~= nil then
-      local activeLootList = self.db.profile.activeLootList
-      local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
-      local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootDistributionList[self.chatMessageLootName])
+  local chatMessageLootExists = self.chatMessageLootName ~= nil
 
-      self.previousLootName = self.chatMessageLootName
-      self:openItemChooser(self.chatMessageLootName, itemLink, playersToRoll, priorityToRoll)
-      self.chatMessageLootName = nil
-    end
+  if isPlayer and chatMessageLootExists then
+    local lootDistributionList = self.db.profile.lootDistributionList[self.db.profile.activeLootList]
+    local lootPriorities = lootDistributionList[self.chatMessageLootName]
+
+    local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootPriorities,
+                                                                          startingPriority,
+                                                                          reverse
+                                                                         )
+
+    self:openItemChooser(self.chatMessageLootName, itemLink, playersToRoll, priorityToRoll, lootPriorities)
+    self.chatMessageLootName = nil --TODO cleanup in seperate method
   end
 
 end
@@ -44,7 +36,7 @@ function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
   local lootName = nil
 
   if NoLootUtil:isEmpty(text) then
-    lootName = self.previousLootName
+    lootName = self.currentLootItem
   else
     lootName = string.match(text, '%[(.*)%]')
   end
@@ -69,13 +61,13 @@ function ItemDistribution:isLootInActiveLootList(lootName)
 
 end
 
-function ItemDistribution:manualProcess(lootName)
+function ItemDistribution:manualProcess(lootName, startingPriority, reverse)
 
-  if lootName == nil then lootName = self.previousLootName end
-  local noPreviousLoot = self.previousLootName == nil
+  if lootName == nil then lootName = self.currentLootItem end
+  local noPreviousLoot = self.currentLootItem == nil
 
   if noPreviousLoot and lootName == nil then
-    print("No Previous loot to process")
+    NoLootUtil:log("No Previous loot to process")
     return false
   end
 
@@ -89,19 +81,48 @@ function ItemDistribution:manualProcess(lootName)
   if self:isLootInActiveLootList(lootName) then
     local fakeChatMessageLoot = "[" .. lootName .. "]"
     self:CHAT_MSG_LOOT("CHAT_MSG_LOOT", fakeChatMessageLoot)
-    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", itemLink)
+    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", itemLink, startingPriority, reverse)
     return true
   else
-    print(lootName .. " not found in active loot list")
+    NoLootUtil:log('Item "' .. lootName .. '"' .. " not found in active loot list")
     return false
   end
   
 end
 
-function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, priorityLevel)
+function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, playerName)
 
-  -- Frame is open, dont open another one
-  if self.isOpen then return end
+  local activeLootList = self.db.profile.activeLootList
+  local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
+  local lootPriorities = lootDistributionList[lootName]
+
+  for key, lootPriority in pairs(lootPriorities) do
+    local priority = lootPriority["priority"]
+    if priority == priorityLevel then
+      for key, player in pairs(lootPriority["players"]) do
+        if playerName == player["playerName"] then
+          player["has"] = true
+          break
+        end
+      end
+      break
+    end
+  end
+
+end
+
+function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, priorityLevel, lootPriorities)
+
+  if playerNames == nil then playerNames = {} end
+  local playerNamesCount = table.getn(playerNames)
+
+  -- Frame is open, dont open another one, add the item to the stack
+  if self.isOpen then
+    table.insert(self.itemsToDistribute, lootName)
+    return
+  end
+
+  self.currentLootItem = lootName
 
   --------------------------------- Main Frame ---------------------------------
   local mainFrame = CreateFrame("Frame", "LootDistribution", UIParent, "BackdropTemplate")
@@ -110,10 +131,10 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
     mainFrame:SetPoint("TOPLEFT")
   else
     mainFrame:SetPoint(self.db.profile.framePoint,
-                       self.db.profile.frameRelativeTo,
-                       self.db.profile.frameRelativePoint,
-                       self.db.profile.frameOffsetX,
-                       self.db.profile.frameOffsetY)
+      self.db.profile.frameRelativeTo,
+      self.db.profile.frameRelativePoint,
+      self.db.profile.frameOffsetX,
+      self.db.profile.frameOffsetY)
   end
 
   mainFrame:SetWidth(180)
@@ -141,7 +162,7 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
   end)
 
   --------------------------------- Loot Name ----------------------------------
-  if priorityLevel ~= nil then
+  if playerNamesCount ~= 0 then
     local title = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
     title:SetPoint("TOPLEFT", 7, -10)
 
@@ -156,7 +177,7 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
 
   -------------------------------- Close button --------------------------------
   local closeButton = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
-  closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 0 , 0)
+  closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 0, 0)
   closeButton:SetScript("OnClick", function()
     mainFrame:Hide()
     ItemDistribution.isOpen = false
@@ -178,19 +199,20 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
     --GetItemInfoDelayed(lootName)
     -- local _, lootNameItemLink = GetItemInfo(lootName)
     -- item = Item:CreateFromItemLink(lootNameItemLink)
-    print("No icon to show since item is not cached")
+    NoLootUtil:log("No icon to show since item is not cached")
   else
     item:ContinueOnItemLoad(function()
       local itemID = item:GetItemID()
       local name = item:GetItemName()
       local icon = item:GetItemIcon()
 
-      -- local itemLocation = ItemLocation:CreateFromBagAndSlot(bag, slot)
-      -- local itemID = C_Item.GetItemID(itemLocation)
-      -- local fileDataID = C_Item.GetItemIcon(itemLocation)
+      local yOffset = 6
+      if playerNamesCount < 4 then
+        yOffset = -9
+      end
 
       local itemIcon = CreateFrame("Frame", nil, mainFrame)
-      itemIcon:SetPoint("CENTER", -55, -10)
+      itemIcon:SetPoint("CENTER", -55, yOffset)
       itemIcon:SetSize(50, 50)
       itemIcon.tex = itemIcon:CreateTexture()
       itemIcon.tex:SetAllPoints(itemIcon)
@@ -210,14 +232,14 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
   end
 
   -------------------------------- Player Button -------------------------------
-  if priorityLevel == nil then
+  if playerNamesCount == 0 then
     local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
     openRollString:SetPoint("TOP", 25, -40)
     openRollString:SetText("Open Roll!")
     mainFrame:SetHeight(85)
   else
     local yPosition = -30
-    local playerNamesCount = 0
+    
     for _, playerName in ipairs(playerNames) do
       local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
       playerButton.playerName = playerName
@@ -227,56 +249,89 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
       playerButton:SetScript("OnClick", function(self, button)
         ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, self.playerName)
         ItemDistribution.isOpen = false
+        ItemDistribution.currentLootItem = nil
         mainFrame:Hide()
+
+        local stillItemsToDistribute = table.getn(ItemDistribution.itemsToDistribute) > 0
+        if stillItemsToDistribute then
+          ItemDistribution:manualProcess(table.remove(ItemDistribution.itemsToDistribute, 1))
+        end
+        
       end)
 
       yPosition = yPosition - 20
-      playerNamesCount = playerNamesCount + 1
     end
 
     local heightToAdd = 0
     if playerNamesCount > 2 then
       heightToAdd = (playerNamesCount - 2) * 20
     end
-    mainFrame:SetHeight(85 + heightToAdd - 5)
+    mainFrame:SetHeight(85 + heightToAdd)
+  end
+  -------------------------- Prev / Next Prio Buttons -------------------------
+  local prevXOffset = 45
+  local nextXOffset = -45
+
+  if playerNamesCount < 4 then
+    prevXOffset = 70
+    nextXOffset = -20
   end
 
+  --Check to see if there are higher priorities
+  local hasHigherPrios = NoLootUtil:isThereMorePriorities(lootPriorities, priorityLevel - 1)
+  if hasHigherPrios then
+    local prevPrioButton = CreateFrame("Button", "prevPrioButton", mainFrame)
+    prevPrioButton:SetPoint("BOTTOMLEFT", prevXOffset, 5)
+    prevPrioButton:SetSize(32, 32)
+    prevPrioButton.tex = prevPrioButton:CreateTexture()
+    prevPrioButton.tex:SetAllPoints(prevPrioButton)
+    prevPrioButton.tex:SetTexture(131168)
+    prevPrioButton:SetScript("OnMouseDown", function(self)
+      self.tex:SetTexture(131166)
+    end)
+    prevPrioButton:SetScript("OnMouseUp", function(self)
+      self.tex:SetTexture(131168)
+    end)
+    prevPrioButton:SetScript("OnClick", function(self)
+      ItemDistribution.isOpen = false
+      ItemDistribution.currentLootItem = nil
+      mainFrame:Hide()
+      ItemDistribution:manualProcess(lootName, priorityLevel - 1, true)
+    end)
+  end
+
+  --Check to see if there are lower priorities
+  local hasLowerPrios = NoLootUtil:isThereMorePriorities(lootPriorities, priorityLevel + 1, true)
+  if hasLowerPrios then
+    local nextPrioButton = CreateFrame("Button", "nextPrioButton", mainFrame)
+    nextPrioButton:SetPoint("BOTTOMRIGHT", nextXOffset, 5)
+    nextPrioButton:SetSize(32, 32)
+    nextPrioButton.tex = nextPrioButton:CreateTexture()
+    nextPrioButton.tex:SetAllPoints(nextPrioButton)
+    nextPrioButton.tex:SetTexture(131176)
+    nextPrioButton:SetScript("OnMouseDown", function(self)
+      self.tex:SetTexture(131174)
+    end)
+    nextPrioButton:SetScript("OnMouseUp", function(self)
+      self.tex:SetTexture(131176)
+    end)
+    nextPrioButton:SetScript("OnClick", function(self)
+      ItemDistribution.isOpen = false
+      ItemDistribution.currentLootItem = nil
+      mainFrame:Hide()
+      ItemDistribution:manualProcess(lootName, priorityLevel + 1)
+    end)
+  end
+
+  if hasHigherPrios or hasLowerPrios then
+    mainFrame:SetHeight(mainFrame:GetHeight() + 32)
+  end
+
+  ------------------------------- Dialog is open ------------------------------
   self.isOpen = true
-
 end
 
-function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, playerName)
-
-  local activeLootList = self.db.profile.activeLootList
-  local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
-  local lootPriorities = lootDistributionList[lootName]
-
-  for key, lootPriority in pairs(lootPriorities) do
-    local priority = lootPriority["priority"]
-    if priority == priorityLevel then
-      for key, player in pairs(lootPriority["players"]) do
-        if playerName == player["playerName"] then
-          player["has"] = true
-          break
-        end
-      end
-      break
-    end
-  end
-
+function ItemDistribution:clearTempVariables()
+  self.currentLootItem = nil
+  self.itemsToDistribute = {}
 end
---Left and rigjt lines
--- local left = mainFrame:CreateTexture(nil, "BACKGROUND")
--- left:SetHeight(8)
--- left:SetPoint("LEFT", 3, 0)
--- left:SetPoint("RIGHT", label, "LEFT", -5, 0)
--- left:SetTexture(137057) -- Interface\\Tooltips\\UI-Tooltip-Border
--- left:SetTexCoord(0.81, 0.94, 0.5, 1)
-
--- local right = mainFrame:CreateTexture(nil, "BACKGROUND")
--- right:SetHeight(8)
--- right:SetPoint("RIGHT", -3, 0)
--- right:SetPoint("LEFT", label, "RIGHT", 5, 0)
--- right:SetTexture(137057) -- Interface\\Tooltips\\UI-Tooltip-Border
--- right:SetTexCoord(0.81, 0.94, 0.5, 1)
-

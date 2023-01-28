@@ -35,38 +35,100 @@ function NoLootUtil:GetBagPositionForItemName(itemName)
   return -69, -69
 end
 
-function NoLootUtil:getNextInLinePlayers(lootPrioritiesArray)
+function NoLootUtil:isThereMorePriorities(lootPrioritiesArray, startingPriority, lower)
 
   local playersByPriority = {}
+  local minPriority = 0
   local maxPriority = 0
 
   for key, lootPriority in pairs(lootPrioritiesArray) do
     local priority = lootPriority["priority"]
     playersByPriority[priority] = lootPriority["players"]
     if priority > maxPriority then maxPriority = priority end
+    if priority < minPriority then minPriority = priority end
+  end
+
+  local endingPriority = minPriority
+  local incrementValue = -1
+
+  if lower then
+    endingPriority = maxPriority
+    incrementValue = 1
+  end
+
+  for i = startingPriority, endingPriority, incrementValue do
+
+    local players = playersByPriority[i]
+
+    --What programming language does not have a continue? So stupid
+    if players ~= nil then
+      for key, player in pairs(players) do
+        local playerHasItem = player["has"]
+        if not playerHasItem then
+          return true
+        end
+      end
+    end
+
+  end
+
+  return false
+
+end
+
+function NoLootUtil:getNextInLinePlayers(lootPrioritiesArray, startingPriority, reverse)
+
+  local playersByPriority = {}
+  local minPriority = 0
+  local maxPriority = 0
+
+  for key, lootPriority in pairs(lootPrioritiesArray) do
+    local priority = lootPriority["priority"]
+    playersByPriority[priority] = lootPriority["players"]
+    if priority > maxPriority then maxPriority = priority end
+    if priority < minPriority then minPriority = priority end
   end
 
   local playersToRoll = {}
   local priorityToRoll = 0
 
-  for i = 1, maxPriority do
+  local startingPoint = (startingPriority or minPriority)
+  local endingPoint = maxPriority
+  local incrementValue = 1 --wish there was a ternery operator in Lua, so trash
+
+  if reverse then
+    endingPoint = minPriority
+    incrementValue = -1
+  end
+
+  for i = startingPoint, endingPoint, incrementValue do
+
     local players = playersByPriority[i]
     priorityToRoll = i
 
-    for key, player in pairs(players) do
-      local playerName = player["playerName"]
-      local playerHasItem = player["has"]
-      if not playerHasItem then table.insert(playersToRoll, playerName) end
+    --What programming language does not have a continue? So stupid
+    if players ~= nil then
+      for key, player in pairs(players) do
+        local playerName = player["playerName"]
+        local playerHasItem = player["has"]
+        if not playerHasItem then table.insert(playersToRoll, playerName) end
+      end
+
+      if next(playersToRoll) ~= nil then return playersToRoll, priorityToRoll end
     end
 
-    if next(playersToRoll) ~= nil then return playersToRoll, priorityToRoll end
-
   end
+
+  return playersToRoll, startingPoint
 
 end
 
 function NoLootUtil:isItemLink(value)
   return string.match(value, "item[%-?%d:]+") ~= nil
+end
+
+function NoLootUtil:log(value)
+  print(YELLOW_FONT_COLOR:WrapTextInColorCode("[NoLoot] ") .. value)
 end
 
 function NoLootUtil:wait(delay, func, ...)
