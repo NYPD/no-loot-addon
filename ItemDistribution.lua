@@ -85,7 +85,7 @@ function ItemDistribution:manualProcess(lootNameOrItemLink, startingPriority, re
 
   -- If its still nil, warn the user and exit
   if lootNameOrItemLink == nil then
-    NoLootUtil:log("No Previous loot to process")
+    NoLootUtil:log("No further loot to process")
     return false
   end
 
