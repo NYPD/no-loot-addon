@@ -6,7 +6,8 @@ local ItemDistribution = LibStub("AceAddon-3.0"):GetAddon("ItemDistribution")
 
 local defaults = {
   profile = {
-    lootDistributionList = nil,
+    lootDistributionList = {},
+    lootHistory = {}
   },
 }
 
@@ -25,6 +26,13 @@ function NoLootConfiguration:OnInitialize()
 
   self:RegisterChatCommand("noloot", "SlashCommand")
   self:RegisterChatCommand("cum", "SlashCommand")
+  self:RegisterChatCommand("debug", "debug")
+end
+
+function NoLootConfiguration:debug(arg)
+  for _, playerName in ipairs(ItemDistribution.itemsToDistribute) do
+    print(playerName)
+  end
 end
 function NoLootConfiguration:SlashCommand(arg)
 
@@ -37,31 +45,33 @@ function NoLootConfiguration:SlashCommand(arg)
 
   local isPrev = arg == "prev" or arg == "p"
   local isClear = arg == "clear"
+  local isShowHistory = arg == "history" or arg == "h"
+  local isHistoryPurge = arg == "purge"
 
   if isPrev then
     ItemDistribution:manualProcess(nil)
   elseif isClear then
     ItemDistribution:clearTempVariables()
+  elseif isHistoryPurge then
+    self.db.profile.lootHistory = {}
+  elseif isShowHistory then
+    for _, lootHistoryEntry in ipairs(self.db.profile.lootHistory) do
+      print(lootHistoryEntry)
+    end
   else
 
-    local argNoBrackets = string.match(arg, '%[(.*)%]')
-    if argNoBrackets == nil then argNoBrackets = arg end
-
     local itemId = tonumber(arg)
-    local isItemId = itemId ~= nil
+    local itemLink = NoLootUtil:isItemLink(arg) and arg or nil
 
-    if isItemId then
+    if itemId ~= nil then
       local item = Item:CreateFromItemID(itemId)
       item:ContinueOnItemLoad(function()
-          ItemDistribution:manualProcess(item:GetItemLink())
-      end)
-      return
-    end
-
-    if NoLootUtil:isItemLink(arg) then
-      ItemDistribution:manualProcess(arg)
+                                  ItemDistribution:manualProcess(item:GetItemLink())
+                              end)
+    elseif itemLink ~= nil then
+      ItemDistribution:manualProcess(itemLink)
     else
-      ItemDistribution:manualProcess(argNoBrackets)
+      ItemDistribution:manualProcess(arg)
     end
 
   end

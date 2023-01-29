@@ -35,54 +35,25 @@ function NoLootUtil:GetBagPositionForItemName(itemName)
   return -69, -69
 end
 
-function NoLootUtil:isThereMorePriorities(lootPrioritiesArray, startingPriority, lower)
-
-  local playersByPriority = {}
-  local minPriority = 0
-  local maxPriority = 0
-
-  for key, lootPriority in pairs(lootPrioritiesArray) do
-    local priority = lootPriority["priority"]
-    playersByPriority[priority] = lootPriority["players"]
-    if priority > maxPriority then maxPriority = priority end
-    if priority < minPriority then minPriority = priority end
-  end
-
-  local endingPriority = minPriority
-  local incrementValue = -1
-
-  if lower then
-    endingPriority = maxPriority
-    incrementValue = 1
-  end
-
-  for i = startingPriority, endingPriority, incrementValue do
-
-    local players = playersByPriority[i]
-
-    --What programming language does not have a continue? So stupid
-    if players ~= nil then
-      for key, player in pairs(players) do
-        local playerHasItem = player["has"]
-        if not playerHasItem then
-          return true
-        end
-      end
-    end
-
-  end
-
-  return false
-
+function NoLootUtil:isThereMorePriorities(noLootDB, lootName, startingPriority, lowerPriorities)
+  local playersToRoll = self:getNextInLinePlayers(noLootDB, lootName, startingPriority, not lowerPriorities)
+  return table.getn(playersToRoll) > 0
 end
 
-function NoLootUtil:getNextInLinePlayers(lootPrioritiesArray, startingPriority, reverse)
+function NoLootUtil:getNextInLinePlayers(noLootDB, lootName, startingPriority, reverse)
+
+  if self:isItemLink(lootName) then
+    lootName = string.match(lootName, '%[(.*)%]')
+  end
+
+  local lootDistributionList = noLootDB.profile.lootDistributionList[noLootDB.profile.activeLootList]
+  local lootPriorities = lootDistributionList[lootName]
 
   local playersByPriority = {}
   local minPriority = 0
   local maxPriority = 0
 
-  for key, lootPriority in pairs(lootPrioritiesArray) do
+  for key, lootPriority in pairs(lootPriorities) do
     local priority = lootPriority["priority"]
     playersByPriority[priority] = lootPriority["players"]
     if priority > maxPriority then maxPriority = priority end

@@ -2,8 +2,8 @@ local ItemDistribution = LibStub("AceAddon-3.0"):NewAddon("ItemDistribution", "A
 
 function ItemDistribution:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("NoLootDB")
-  self.currentLootItem = nil
   self.itemsToDistribute = {}
+  self.chatMessageLootFound = false
 end
 
 function ItemDistribution:OnEnable()
@@ -11,38 +11,46 @@ function ItemDistribution:OnEnable()
   self:RegisterEvent("UNIT_INVENTORY_CHANGED")
 end
 
-function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, itemLink, startingPriority, reverse)
+function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
 
-  local isPlayer = unitTarget == "player"
-  local chatMessageLootExists = self.chatMessageLootName ~= nil
+  local lootName = string.match(text, '%[(.*)%]')
 
-  if isPlayer and chatMessageLootExists then
-    local lootDistributionList = self.db.profile.lootDistributionList[self.db.profile.activeLootList]
-    local lootPriorities = lootDistributionList[self.chatMessageLootName]
-
-    local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(lootPriorities,
-                                                                          startingPriority,
-                                                                          reverse
-                                                                         )
-
-    self:openItemChooser(self.chatMessageLootName, itemLink, playersToRoll, priorityToRoll, lootPriorities)
-    self.chatMessageLootName = nil --TODO cleanup in seperate method
+  if self:isLootInActiveLootList(lootName) then
+    table.insert(self.itemsToDistribute, lootName)
+    self.chatMessageLootFound =  true
   end
 
 end
 
-function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
+function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, startingPriority, reverse, isManualProcess)
 
-  local lootName = nil
+  local isPlayer = unitTarget == "player"
+  local itemsToDistributeCount = table.getn(self.itemsToDistribute)
+  local thereAreItemsToDistribute = itemsToDistributeCount > 0
 
-  if NoLootUtil:isEmpty(text) then
-    lootName = self.currentLootItem
-  else
-    lootName = string.match(text, '%[(.*)%]')
-  end
+  --[[
+    Four conditions to Auto open up the GUI:
+    1. Unit inventory changed on the player, 
+    2. There are items to distribute in the itemsToDistribute
+    3. The user picked up something on the list
 
-  if self:isLootInActiveLootList(lootName) then
-    self.chatMessageLootName = lootName
+            or
+    1. isManualProcess is true
+  ]]
+  local validAutoOpenGui = isPlayer and thereAreItemsToDistribute and self.chatMessageLootFound
+  if validAutoOpenGui or isManualProcess then
+
+    self.chatMessageLootFound = false
+
+    local positionToRemove = isManualProcess and itemsToDistributeCount or 1
+    local lootToRoll = table.remove(self.itemsToDistribute, positionToRemove)
+    local playersToRoll, priorityToRoll = NoLootUtil:getNextInLinePlayers(ItemDistribution.db,
+                                                                          lootToRoll,
+                                                                          startingPriority,
+                                                                          reverse)
+
+    ItemDistribution:openItemChooser(lootToRoll, playersToRoll, priorityToRoll)
+
   end
 
 end
@@ -61,27 +69,25 @@ function ItemDistribution:isLootInActiveLootList(lootName)
 
 end
 
-function ItemDistribution:manualProcess(lootName, startingPriority, reverse)
+function ItemDistribution:manualProcess(lootNameOrItemLink, startingPriority, reverse)
 
-  if lootName == nil then lootName = self.currentLootItem end
-  local noPreviousLoot = self.currentLootItem == nil
+  -- Check if there are nay items in the itemsToDistribute stack
+  if lootNameOrItemLink == nil then
+    lootNameOrItemLink = table.remove(self.itemsToDistribute, 1)
+  end
 
-  if noPreviousLoot and lootName == nil then
+  -- If its still nil, warn the user and exit
+  if lootNameOrItemLink == nil then
     NoLootUtil:log("No Previous loot to process")
     return false
   end
 
-  local itemLink = nil
-  local isItemLink = NoLootUtil:isItemLink(lootName)
-  if isItemLink then
-    itemLink = lootName
-    lootName = string.match(lootName, '%[(.*)%]')
-  end
+  local isItemLink = NoLootUtil:isItemLink(lootNameOrItemLink)
+  local lootName = isItemLink and string.match(lootNameOrItemLink, '%[(.*)%]') or lootNameOrItemLink
 
   if self:isLootInActiveLootList(lootName) then
-    local fakeChatMessageLoot = "[" .. lootName .. "]"
-    self:CHAT_MSG_LOOT("CHAT_MSG_LOOT", fakeChatMessageLoot)
-    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", itemLink, startingPriority, reverse)
+    table.insert(self.itemsToDistribute, lootNameOrItemLink)
+    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", startingPriority, reverse, true)
     return true
   else
     NoLootUtil:log('Item "' .. lootName .. '"' .. " not found in active loot list")
@@ -102,6 +108,9 @@ function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, player
       for key, player in pairs(lootPriority["players"]) do
         if playerName == player["playerName"] then
           player["has"] = true
+          local currentDate = date("%m/%d/%y %H:%M:%S")
+          local historyRecord = "[" .. currentDate .. "] " .. playerName .. " received " .. lootName
+          table.insert(self.db.profile.lootHistory, historyRecord)
           break
         end
       end
@@ -111,18 +120,20 @@ function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, player
 
 end
 
-function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, priorityLevel, lootPriorities)
+function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityLevel)
 
+  -- Default playerNames to empty table, since Lua has no default values. So dumb
   if playerNames == nil then playerNames = {} end
   local playerNamesCount = table.getn(playerNames)
 
   -- Frame is open, dont open another one, add the item to the stack
   if self.isOpen then
-    table.insert(self.itemsToDistribute, lootName)
+    table.insert(self.itemsToDistribute, lootNameOrLink)
     return
   end
 
-  self.currentLootItem = lootName
+  local isLootLink = NoLootUtil:isItemLink(lootNameOrLink)
+  local lootName = isLootLink and string.match(lootNameOrLink, '%[(.*)%]') or lootNameOrLink
 
   --------------------------------- Main Frame ---------------------------------
   local mainFrame = CreateFrame("Frame", "LootDistribution", UIParent, "BackdropTemplate")
@@ -180,31 +191,30 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
   closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 0, 0)
   closeButton:SetScript("OnClick", function()
     mainFrame:Hide()
+    -- Save the item the user did not select and player for
+    if playerNamesCount > 0 then
+      table.insert(ItemDistribution.itemsToDistribute, lootNameOrLink)
+    end
     ItemDistribution.isOpen = false
   end)
 
   --------------------------------- Item Icon ---------------------------------
   local bag, slot = NoLootUtil:GetBagPositionForItemName(lootName)
+  local lootItem = nil
 
-  local item
-
-  if itemLink ~= nil then
-    item = Item:CreateFromItemLink(itemLink)
+  if isLootLink then
+    lootItem = Item:CreateFromBagAndSlot(bag, slot)
   else
-    item = Item:CreateFromBagAndSlot(bag, slot)
+    lootItem = Item:CreateFromItemLink(lootNameOrLink)
   end
 
-  --TODO this shit wont work
-  if item:IsItemEmpty() then
-    --GetItemInfoDelayed(lootName)
-    -- local _, lootNameItemLink = GetItemInfo(lootName)
-    -- item = Item:CreateFromItemLink(lootNameItemLink)
+  --TODO this shit wont work, this will hapen if user types in loot
+  if lootItem:IsItemEmpty() then
     NoLootUtil:log("No icon to show since item is not cached")
   else
-    item:ContinueOnItemLoad(function()
-      local itemID = item:GetItemID()
-      local name = item:GetItemName()
-      local icon = item:GetItemIcon()
+    lootItem:ContinueOnItemLoad(function()
+      local itemID = lootItem:GetItemID()
+      local icon = lootItem:GetItemIcon()
 
       local yOffset = 6
       if playerNamesCount < 4 then
@@ -218,7 +228,6 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
       itemIcon.tex:SetAllPoints(itemIcon)
       itemIcon.tex:SetTexture(icon)
       itemIcon:SetScript("OnEnter", function(self)
-        --GameTooltip:SetOwner(mainFrame, "ANCHOR_TOP")
         -- How do I change the tooltip anchor froum mouse?
         GameTooltip:SetOwner(mainFrame, "ANCHOR_CURSOR", 0, 0)
         GameTooltip:SetHyperlink("item:" .. itemID .. ":0:0:0:0:0:0:0")
@@ -239,25 +248,35 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
     mainFrame:SetHeight(85)
   else
     local yPosition = -30
-    
-    for _, playerName in ipairs(playerNames) do
-      local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-      playerButton.playerName = playerName
-      playerButton:SetPoint("TOP", mainFrame, 25, yPosition)
-      playerButton:SetSize(100, 20)
-      playerButton:SetText(playerName)
-      playerButton:SetScript("OnClick", function(self, button)
-        ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, self.playerName)
-        ItemDistribution.isOpen = false
-        ItemDistribution.currentLootItem = nil
-        mainFrame:Hide()
 
-        local stillItemsToDistribute = table.getn(ItemDistribution.itemsToDistribute) > 0
-        if stillItemsToDistribute then
-          ItemDistribution:manualProcess(table.remove(ItemDistribution.itemsToDistribute, 1))
-        end
-        
-      end)
+    for _, playerName in ipairs(playerNames) do
+
+      local isClassSpecificLoot = playerName:sub(1, 1) == "["
+
+      if isClassSpecificLoot then
+        local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+        openRollString:SetPoint("TOP", 25, yPosition)
+        openRollString:SetText(playerName)
+      else
+
+        local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+        playerButton.playerName = playerName
+        playerButton:SetPoint("TOP", mainFrame, 25, yPosition)
+        playerButton:SetSize(100, 20)
+        playerButton:SetText(playerName)
+        playerButton:SetScript("OnClick", function(self, button)
+          ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, self.playerName)
+          mainFrame:Hide()
+          ItemDistribution.isOpen = false
+
+          local stillItemsToDistribute = table.getn(ItemDistribution.itemsToDistribute) > 0
+          if stillItemsToDistribute then
+            ItemDistribution:manualProcess(table.remove(ItemDistribution.itemsToDistribute, 1))
+          end
+
+        end)
+
+      end
 
       yPosition = yPosition - 20
     end
@@ -278,7 +297,7 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
   end
 
   --Check to see if there are higher priorities
-  local hasHigherPrios = NoLootUtil:isThereMorePriorities(lootPriorities, priorityLevel - 1)
+  local hasHigherPrios = NoLootUtil:isThereMorePriorities(self.db, lootName, priorityLevel - 1)
   if hasHigherPrios then
     local prevPrioButton = CreateFrame("Button", "prevPrioButton", mainFrame)
     prevPrioButton:SetPoint("BOTTOMLEFT", prevXOffset, 5)
@@ -294,14 +313,13 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
     end)
     prevPrioButton:SetScript("OnClick", function(self)
       ItemDistribution.isOpen = false
-      ItemDistribution.currentLootItem = nil
       mainFrame:Hide()
       ItemDistribution:manualProcess(lootName, priorityLevel - 1, true)
     end)
   end
 
   --Check to see if there are lower priorities
-  local hasLowerPrios = NoLootUtil:isThereMorePriorities(lootPriorities, priorityLevel + 1, true)
+  local hasLowerPrios = NoLootUtil:isThereMorePriorities(self.db, lootName, priorityLevel + 1, true)
   if hasLowerPrios then
     local nextPrioButton = CreateFrame("Button", "nextPrioButton", mainFrame)
     nextPrioButton:SetPoint("BOTTOMRIGHT", nextXOffset, 5)
@@ -317,7 +335,6 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
     end)
     nextPrioButton:SetScript("OnClick", function(self)
       ItemDistribution.isOpen = false
-      ItemDistribution.currentLootItem = nil
       mainFrame:Hide()
       ItemDistribution:manualProcess(lootName, priorityLevel + 1)
     end)
@@ -332,6 +349,5 @@ function ItemDistribution:openItemChooser(lootName, itemLink, playerNames, prior
 end
 
 function ItemDistribution:clearTempVariables()
-  self.currentLootItem = nil
   self.itemsToDistribute = {}
 end

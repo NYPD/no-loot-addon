@@ -153,9 +153,18 @@ function NoLootOptions:GetNewLootListValue(info)
   if self.newLootListValue ~= "" then
     return self.newLootListValue
   else
-    local activeLootListValue = self.db.profile.lootDistributionList[self.db.profile.activeLootList]
-    local stringifiedJson = JSON.stringify(activeLootListValue)
-    return stringifiedJson == "null" and "" or stringifiedJson
+
+    local lootDistributionList = self.db.profile.lootDistributionList
+    local activeLootListValue = lootDistributionList[self.db.profile.activeLootList]
+
+    -- Brand new addon install, check to see if any lists are on there
+    if activeLootListValue == nil or next(activeLootListValue) == nil then
+      return ""
+    else
+      local stringifiedJson = JSON.stringify(activeLootListValue)
+      return stringifiedJson == "null" and "" or stringifiedJson
+    end
+
   end
 end
 function NoLootOptions:SetNewLootListValue(info, value)
