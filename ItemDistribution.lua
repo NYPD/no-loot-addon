@@ -321,7 +321,7 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
     prevPrioButton:SetScript("OnClick", function(self)
       ItemDistribution.isOpen = false
       mainFrame:Hide()
-      ItemDistribution:manualProcess(lootName, priorityLevel - 1, true)
+      ItemDistribution:manualProcess(lootNameOrLink, priorityLevel - 1, true)
     end)
   end
 
@@ -343,7 +343,7 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
     nextPrioButton:SetScript("OnClick", function(self)
       ItemDistribution.isOpen = false
       mainFrame:Hide()
-      ItemDistribution:manualProcess(lootName, priorityLevel + 1)
+      ItemDistribution:manualProcess(lootNameOrLink, priorityLevel + 1)
     end)
   end
 
