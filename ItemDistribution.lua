@@ -13,6 +13,9 @@ end
 
 function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
 
+  --If no Active loot list, returns
+  if self.db.profile.activeLootList == nil then return end
+
   local lootName = string.match(text, '%[(.*)%]')
 
   if self:isLootInActiveLootList(lootName) then
@@ -23,6 +26,9 @@ function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
 end
 
 function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, startingPriority, reverse, isManualProcess)
+
+  --If no Active loot list, returns
+  if self.db.profile.activeLootList == nil then return end
 
   local isPlayer = unitTarget == "player"
   local itemsToDistributeCount = table.getn(self.itemsToDistribute)
@@ -58,10 +64,11 @@ end
 function ItemDistribution:isLootInActiveLootList(lootName)
 
   local activeLootList = self.db.profile.activeLootList
-  local lootDistributionList = self.db.profile.lootDistributionList[activeLootList]
+  local lootDistributionList = self.db.profile.lootDistributionList
+  local lootPriorities = lootDistributionList ~= nil and lootDistributionList[activeLootList] or nil
 
   -- Loot exists in the active loot list!
-  if lootDistributionList[lootName] then
+  if lootPriorities ~= nil and lootPriorities[lootName] then
     return true
   else
     return false
@@ -202,13 +209,13 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
   local bag, slot = NoLootUtil:GetBagPositionForItemName(lootName)
   local lootItem = nil
 
-  if isLootLink then
+  if not isLootLink then
     lootItem = Item:CreateFromBagAndSlot(bag, slot)
   else
     lootItem = Item:CreateFromItemLink(lootNameOrLink)
   end
 
-  --TODO this shit wont work, this will hapen if user types in loot
+  --TODO Fix this, this will hapen if user types in loot and is not in bags
   if lootItem:IsItemEmpty() then
     NoLootUtil:log("No icon to show since item is not cached")
   else

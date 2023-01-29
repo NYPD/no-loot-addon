@@ -17,7 +17,7 @@ function NoLootOptions:getInstance(NoLootDB)
   self.newLootListName = "";
   self.newLootListValue = "";
   self.options = {
-    name = "NoLoot",
+    name = "NoLoot " .. NoLootVersion,
     handler = self,
     type = "group",
     args = {
