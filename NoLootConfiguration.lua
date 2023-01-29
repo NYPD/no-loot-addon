@@ -43,12 +43,12 @@ function NoLootConfiguration:SlashCommand(arg)
     return
   end
 
-  local isPrev = arg == "prev" or arg == "p"
+  local isTrigger = arg == "trigger" or arg == "trig" or arg == "t"
   local isClear = arg == "clear"
   local isShowHistory = arg == "history" or arg == "h"
   local isHistoryPurge = arg == "purge"
 
-  if isPrev then
+  if isTrigger then
     ItemDistribution:manualProcess(nil)
   elseif isClear then
     ItemDistribution:clearTempVariables()
