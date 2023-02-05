@@ -14,8 +14,6 @@ function NoLootOptions:getInstance(NoLootDB)
   end
 
   self.db = NoLootDB
-  self.newLootListName = "";
-  self.newLootListValue = "";
   self.options = {
     name = "NoLoot " .. NoLootVersion,
     handler = self,
@@ -30,7 +28,8 @@ function NoLootOptions:getInstance(NoLootDB)
         set = "SetActiveLootList",
         disabled = "DisableActiveLootList",
         style = "dropdown",
-        order = 0
+        order = 0,
+        width = 1.5
       },
       deleteLootListButton = {
         type = "execute",
@@ -41,58 +40,38 @@ function NoLootOptions:getInstance(NoLootDB)
         confirm = function() return "Are you sure you want to delete: " .. self.db.profile.activeLootList end,
         order = 1
       },
+      addLootListInput = {
+        type = "input",
+        name = "Add New Loot List",
+        desc = "Name of the new Loot list",
+        set = "AddNewLootList",
+        validate = "NotEmptyString",
+        order = 2,
+        width = 1.5
+      },
       addNewListHeader = {
         type = "header",
-        name = "Add/Edit Loot List",
-        order = 2
+        name = "Edit Loot List",
+        order = 3
       },
-      newLootListNameInput = {
+      editLootListNameInput = {
         type = "input",
         name = "Loot List Name",
-        desc = "Name of the new Loot list",
-        get = "GetNewLootListName",
-        set = "SetNewLootListName",
-        order = 3
+        desc = "Edit the loot list name",
+        get = "GetEditLootListName",
+        set = "SetEditLootListName",
+        validate = "NotEmptyString",
+        order = 4
       },
       newLootListValueInput = {
         type = "input",
         name = "Loot List JSON",
         desc = "Enter JSON here",
         multiline = 20,
-        get = "GetNewLootListValue",
-        set = "SetNewLootListValue",
+        get = "GetLootListJSON",
+        set = "SetLootListJSON",
         validate = "ValidateNewLootListValue",
         width = "full",
-        order = 4
-      },
-      saveLootListButton = {
-        type = "execute",
-        name = function()
-          local lootListName = self:GetNewLootListName()
-          if lootListName == nil then
-            return "Add"
-          end
-
-          for key, value in pairs(self.db.profile.lootDistributionList) do
-            if key == lootListName then
-              return "Edit " .. lootListName
-            end
-          end
-
-          return "Add " .. lootListName
-        end,
-        desc = nil,
-        hidden = function()
-          local lootListName = self:GetNewLootListName()
-          if lootListName == nil then
-            return true
-          end
-          
-          return false
-        end,
-        func = "SaveLootList",
-        disabled = "CheckSaveLootListDisabled",
-        width = nil,
         order = 5
       },
     },
@@ -118,7 +97,6 @@ function NoLootOptions:GetActiveLootList()
 end
 function NoLootOptions:SetActiveLootList(key, value)
   if value ~= "" then
-    self.newLootListName = ""
     self.db.profile.activeLootList = value
   end
 end
@@ -134,42 +112,51 @@ end
 function NoLootOptions:DeleteLootList(info)
   self.db.profile.lootDistributionList[self.db.profile.activeLootList] = nil
   self.db.profile.activeLootList = nil
-  self.newLootListName = ""
-  self.newLootListValue = ""
 end
----------------------  New Loot List Name Input ---------------------
-function NoLootOptions:GetNewLootListName(info)
-  if self.newLootListName ~= "" then
-    return self.newLootListName
-  else
+--------------------------  Add New Loot List Button --------------------------
+function NoLootOptions:AddNewLootList(info, value)
+  self.db.profile.lootDistributionList[value] = {}
+end
+--------------------------  Edit Loot List Name Input --------------------------
+function NoLootOptions:GetEditLootListName(info)
     return self.db.profile.activeLootList
-  end
 end
-function NoLootOptions:SetNewLootListName(info, value)
-  self.newLootListName = value
+function NoLootOptions:SetEditLootListName(info, value)
+
+  local activeLootList = self.db.profile.activeLootList
+  local oldLootListTable = self.db.profile.lootDistributionList[activeLootList]
+
+  --Delete the old loot list
+  self.db.profile.lootDistributionList[activeLootList] = nil
+  -- Copy over the old table to the new name
+  self.db.profile.lootDistributionList[value] = oldLootListTable
+  -- Set the activeList to the new name
+  self.db.profile.activeLootList = value
 end
 ---------------------  New Loot List Value Input ---------------------
-function NoLootOptions:GetNewLootListValue(info)
-  if self.newLootListValue ~= "" then
-    return self.newLootListValue
+function NoLootOptions:GetLootListJSON(info)
+
+  local lootDistributionList = self.db.profile.lootDistributionList
+  local activeLootListValue = lootDistributionList[self.db.profile.activeLootList]
+
+  -- Brand new addon install, check to see if any lists are on there
+  if activeLootListValue == nil or next(activeLootListValue) == nil then
+    return ""
   else
-
-    local lootDistributionList = self.db.profile.lootDistributionList
-    local activeLootListValue = lootDistributionList[self.db.profile.activeLootList]
-
-    -- Brand new addon install, check to see if any lists are on there
-    if activeLootListValue == nil or next(activeLootListValue) == nil then
-      return ""
-    else
-      local stringifiedJson = JSON.stringify(activeLootListValue)
-      return stringifiedJson == "null" and "" or stringifiedJson
-    end
-
+    local stringifiedJson = JSON.stringify(activeLootListValue)
+    return stringifiedJson == "null" and "" or stringifiedJson
   end
+
 end
-function NoLootOptions:SetNewLootListValue(info, value)
-  self.newLootListValue = value
+function NoLootOptions:SetLootListJSON(info, value)
+
+  local activeLootList = self.db.profile.activeLootList
+  local lootListTable = JSON.parse(value)
+
+  self.db.profile.lootDistributionList[activeLootList] = lootListTable
 end
+
+---------------------------------  Validators ---------------------------------
 function NoLootOptions:ValidateNewLootListValue(info, value)
   -- Try to parse the json to see if it blows up
   local jsonParse = nil
@@ -185,36 +172,11 @@ function NoLootOptions:ValidateNewLootListValue(info, value)
     return true
   end
 end
----------------------  Save Loot List ---------------------
-function NoLootOptions:SaveLootList(info)
 
-  local lootListName = self:GetNewLootListName()
-  local lootListValue= self:GetNewLootListValue()
-  local lootListTable = nil
-
-  if type(lootListValue) == "string" then
-    lootListTable = JSON.parse(lootListValue)
-  else
-    lootListTable = lootListValue
+function NoLootOptions:NotEmptyString(info, value)
+  if value == "" or value == nil then
+    return "Name must not be blank"
   end
 
-  self.db.profile.lootDistributionList[lootListName] = lootListTable
-
-  if self.db.profile.activeLootList ~= self.newLootListName then
-    self.newLootListName = ""
-    self.newLootListValue = ""
-  end
-          
+  return true
 end
-function NoLootOptions:CheckSaveLootListDisabled(info, value)
-
-  local lootListName = self:GetNewLootListName()
-  local lootListValue = self:GetNewLootListValue()
-
-  if NoLootUtil:isEmpty(lootListName) or NoLootUtil:isEmpty(lootListValue) then
-    return true
-  end
-
-  return false
-end
-
