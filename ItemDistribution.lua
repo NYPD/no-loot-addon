@@ -8,10 +8,10 @@ end
 
 function ItemDistribution:OnEnable()
   self:RegisterEvent("CHAT_MSG_LOOT")
-  self:RegisterEvent("UNIT_INVENTORY_CHANGED")
+  self:RegisterEvent("BAG_UPDATE_DELAYED")
 end
 
-function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
+function ItemDistribution:CHAT_MSG_LOOT(eventName, text, playerName)
 
   --If no Active loot list, returns
   if self.db.profile.activeLootList == nil then return end
@@ -25,12 +25,11 @@ function ItemDistribution:CHAT_MSG_LOOT(eventName, text)
 
 end
 
-function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, startingPriority, reverse, isManualProcess)
+function ItemDistribution:BAG_UPDATE_DELAYED(eventName, startingPriority, reverse, isManualProcess)
 
   --If no Active loot list, returns
   if self.db.profile.activeLootList == nil then return end
 
-  local isPlayer = unitTarget == "player"
   local itemsToDistributeCount = table.getn(self.itemsToDistribute)
   local thereAreItemsToDistribute = itemsToDistributeCount > 0
 
@@ -43,7 +42,7 @@ function ItemDistribution:UNIT_INVENTORY_CHANGED(eventName, unitTarget, starting
             or
     1. isManualProcess is true
   ]]
-  local validAutoOpenGui = isPlayer and thereAreItemsToDistribute and self.chatMessageLootFound
+  local validAutoOpenGui = thereAreItemsToDistribute and self.chatMessageLootFound
   if validAutoOpenGui or isManualProcess then
 
     self.chatMessageLootFound = false
@@ -94,7 +93,7 @@ function ItemDistribution:manualProcess(lootNameOrItemLink, startingPriority, re
 
   if self:isLootInActiveLootList(lootName) then
     table.insert(self.itemsToDistribute, lootNameOrItemLink)
-    self:UNIT_INVENTORY_CHANGED("UNIT_INVENTORY_CHANGED", "player", startingPriority, reverse, true)
+    self:BAG_UPDATE_DELAYED("BAG_UPDATE_DELAYED", startingPriority, reverse, true)
     return true
   else
     NoLootUtil:log('Item "' .. lootName .. '"' .. " not found in active loot list")
@@ -357,4 +356,5 @@ end
 
 function ItemDistribution:clearTempVariables()
   self.itemsToDistribute = {}
+  self.chatMessageLootFound = false
 end
