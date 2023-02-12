@@ -1,1 +1,1 @@
-NoLootVersion = "v0.0.2"
+NoLootVersion = "v0.0.3"
