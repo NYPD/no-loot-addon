@@ -13,6 +13,8 @@ end
 
 function ItemDistribution:CHAT_MSG_LOOT(eventName, text, playerName)
 
+  --If player didn't pick up loot, exit. Apparently playerName is not populated..
+  if text:sub(1,3) ~= "You" then return end
   --If no Active loot list, returns
   if self.db.profile.activeLootList == nil then return end
 
