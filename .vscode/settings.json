@@ -33,6 +33,9 @@
     "CHAT_MSG_LOOT",
     "NUM_BAG_SLOTS",
     "GameTooltip_SetDefaultAnchor",
-    "YELLOW_FONT_COLOR"
+    "YELLOW_FONT_COLOR",
+    "FauxScrollFrame_Update",
+    "FauxScrollFrame_OnVerticalScroll",
+    "FauxScrollFrame_GetOffset"
   ]
 }

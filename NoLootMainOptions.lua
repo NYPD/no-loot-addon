@@ -2,12 +2,12 @@ local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
 
-NoLootOptions = {}
-NoLootOptions.__index = NoLootOptions;
-function NoLootOptions:getInstance(NoLootDB)
+NoLootMainOptions = {}
+NoLootMainOptions.__index = NoLootMainOptions;
+function NoLootMainOptions:getInstance(NoLootDB)
 
   local self = {};
-  setmetatable(self, NoLootOptions);
+  setmetatable(self, NoLootMainOptions);
 
   if self._instance then
     return self._instance
@@ -82,7 +82,7 @@ function NoLootOptions:getInstance(NoLootDB)
 end
 
 -------------------------  Active Loot List DropDown -------------------------
-function NoLootOptions:GetLootListValues(info)
+function NoLootMainOptions:GetLootListValues(info)
 
   local dropDownValues = {}
 
@@ -92,15 +92,15 @@ function NoLootOptions:GetLootListValues(info)
 
   return dropDownValues
 end
-function NoLootOptions:GetActiveLootList()
+function NoLootMainOptions:GetActiveLootList()
   return self.db.profile.activeLootList
 end
-function NoLootOptions:SetActiveLootList(key, value)
+function NoLootMainOptions:SetActiveLootList(key, value)
   if value ~= "" then
     self.db.profile.activeLootList = value
   end
 end
-function NoLootOptions:DisableActiveLootList()
+function NoLootMainOptions:DisableActiveLootList()
   if self.db.profile.lootDistributionList == nil then
     return true
   end
@@ -109,19 +109,19 @@ function NoLootOptions:DisableActiveLootList()
 end
 
 ---------------------  Delete Active Loot List Button ---------------------
-function NoLootOptions:DeleteLootList(info)
+function NoLootMainOptions:DeleteLootList(info)
   self.db.profile.lootDistributionList[self.db.profile.activeLootList] = nil
   self.db.profile.activeLootList = nil
 end
 --------------------------  Add New Loot List Button --------------------------
-function NoLootOptions:AddNewLootList(info, value)
+function NoLootMainOptions:AddNewLootList(info, value)
   self.db.profile.lootDistributionList[value] = {}
 end
 --------------------------  Edit Loot List Name Input --------------------------
-function NoLootOptions:GetEditLootListName(info)
+function NoLootMainOptions:GetEditLootListName(info)
     return self.db.profile.activeLootList
 end
-function NoLootOptions:SetEditLootListName(info, value)
+function NoLootMainOptions:SetEditLootListName(info, value)
 
   local activeLootList = self.db.profile.activeLootList
   local oldLootListTable = self.db.profile.lootDistributionList[activeLootList]
@@ -134,7 +134,7 @@ function NoLootOptions:SetEditLootListName(info, value)
   self.db.profile.activeLootList = value
 end
 ---------------------  New Loot List Value Input ---------------------
-function NoLootOptions:GetLootListJSON(info)
+function NoLootMainOptions:GetLootListJSON(info)
 
   local lootDistributionList = self.db.profile.lootDistributionList
   local activeLootListValue = lootDistributionList[self.db.profile.activeLootList]
@@ -148,7 +148,7 @@ function NoLootOptions:GetLootListJSON(info)
   end
 
 end
-function NoLootOptions:SetLootListJSON(info, value)
+function NoLootMainOptions:SetLootListJSON(info, value)
 
   local activeLootList = self.db.profile.activeLootList
   local lootListTable = JSON.parse(value)
@@ -157,7 +157,7 @@ function NoLootOptions:SetLootListJSON(info, value)
 end
 
 ---------------------------------  Validators ---------------------------------
-function NoLootOptions:ValidateNewLootListValue(info, value)
+function NoLootMainOptions:ValidateNewLootListValue(info, value)
   -- Try to parse the json to see if it blows up
   local jsonParse = nil
   try(function()
@@ -173,7 +173,7 @@ function NoLootOptions:ValidateNewLootListValue(info, value)
   end
 end
 
-function NoLootOptions:NotEmptyString(info, value)
+function NoLootMainOptions:NotEmptyString(info, value)
   if value == "" or value == nil then
     return "Name must not be blank"
   end

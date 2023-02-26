@@ -10,6 +10,9 @@ externals:
   libs/AceHook-3.0: https://repos.wowace.com/wow/ace3/trunk/AceHook-3.0
   libs/CallbackHandler-1.0: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
   libs/LibStub: https://repos.wowace.com/wow/libstub/tags/1.0
+  libs/lib-st: 
+      url: https://github.com/ddumont/lib-st.git
+      tag: latest
   
 ignore:
   - Libs
