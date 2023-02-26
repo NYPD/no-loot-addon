@@ -1,13 +1,13 @@
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 local AceConfigRegistry = LibStub("AceConfigRegistry-3.0")
-local AceGUI = LibStub("AceGUI-3.0")
 local ItemDistribution = LibStub("AceAddon-3.0"):GetAddon("ItemDistribution")
 
 local defaults = {
   profile = {
     lootDistributionList = {},
-    lootHistory = {}
+    lootHistory = {},
+    clearItemOnCloseState = false
   },
 }
 
@@ -16,9 +16,13 @@ local NoLootConfiguration = LibStub("AceAddon-3.0"):NewAddon("NoLootConfiguratio
 function NoLootConfiguration:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("NoLootDB", defaults, true)
 
-  local NoLootOptions = NoLootOptions:getInstance(self.db)
-  AceConfig:RegisterOptionsTable("NoLoot_options", NoLootOptions.options)
+  local NoLootMainOptions = NoLootMainOptions:getInstance(self.db)
+  AceConfig:RegisterOptionsTable("NoLoot_options", NoLootMainOptions.options)
   self.optionsFrame = AceConfigDialog:AddToBlizOptions("NoLoot_options", "NoLoot")
+
+  local NoLootSubOptions = NoLootSubOptions:getInstance(self.db)
+  AceConfig:RegisterOptionsTable("NoLoot_Addon_Options", NoLootSubOptions.options)
+  AceConfigDialog:AddToBlizOptions("NoLoot_Addon_Options", "Addon Options", "NoLoot")
 
   local profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(self.db)
   AceConfig:RegisterOptionsTable("NoLoot_Profiles", profiles)
@@ -55,9 +59,8 @@ function NoLootConfiguration:SlashCommand(arg)
   elseif isHistoryPurge then
     self.db.profile.lootHistory = {}
   elseif isShowHistory then
-    for _, lootHistoryEntry in ipairs(self.db.profile.lootHistory) do
-      print(lootHistoryEntry)
-    end
+    local historyService = HistoryService:getInstance(self.db)
+    historyService:showHistoryWindow()
   else
 
     local itemId = tonumber(arg)
@@ -76,4 +79,3 @@ function NoLootConfiguration:SlashCommand(arg)
 
   end
 end
-

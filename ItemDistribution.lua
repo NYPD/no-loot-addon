@@ -116,9 +116,13 @@ function ItemDistribution:markPlayerRecievedItem(lootName, priorityLevel, player
       for key, player in pairs(lootPriority["players"]) do
         if playerName == player["playerName"] then
           player["has"] = true
-          local currentDate = date("%m/%d/%y %H:%M:%S")
-          local historyRecord = "[" .. currentDate .. "] " .. playerName .. " received " .. lootName
-          table.insert(self.db.profile.lootHistory, historyRecord)
+          local currentDate = date("%Y-%m-%d %H:%M:%S")
+          --local historyRecord = "[" .. currentDate .. "] " .. playerName .. " received " .. lootName
+          table.insert(self.db.profile.lootHistory, {
+            ["date"] = currentDate,
+            ["player"] = playerName,
+            ["item"] = lootName,
+          })
           break
         end
       end
@@ -199,8 +203,8 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
   closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 0, 0)
   closeButton:SetScript("OnClick", function()
     mainFrame:Hide()
-    -- Save the item the user did not select and player for
-    if playerNamesCount > 0 then
+    -- Save the item the user did not select a player for it (if enabled in options)
+    if playerNamesCount > 0 and not ItemDistribution.db.profile.clearItemOnCloseState then
       table.insert(ItemDistribution.itemsToDistribute, lootNameOrLink)
     end
     ItemDistribution.isOpen = false
