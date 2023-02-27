@@ -40,7 +40,7 @@ Dumb addon to help distribute loot easier during raid based on "Loot Priority Le
 
 ### ```/noloot h```
 
-- Print the history of what item was given to a player in the chat window
+- Brings up the item history window
 
 ### ```/noloot clear```
 
