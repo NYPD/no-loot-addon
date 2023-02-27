@@ -18,13 +18,14 @@ function NoLootSubOptions:getInstance(NoLootDB)
     handler = self,
     type = "group",
     args = {
-      activeLootListInput = {
+      autoOpenGuiCheckbox = {
         type = "toggle",
-        name = "Clear Item On Close",
-        desc = "Whether closing the current item to distribute window clear that item or not",
-        get = "GetClearItemOnCloseState",
-        set = "SetClearItemOnCloseState",
-        tristate = false
+        name = "Auto Open Item Distribution Window",
+        desc = "Whether or not the Item distribution window should open when looting items",
+        get = "GetAutoOpenGuiState",
+        set = "SetAutoOpenGuiState",
+        tristate = false,
+        width = "full"
       }
     }
   }
@@ -33,12 +34,12 @@ function NoLootSubOptions:getInstance(NoLootDB)
 end
 
 -----------------------------  Clear Item On Close -----------------------------
-function NoLootSubOptions:GetClearItemOnCloseState()
-  return self.db.profile.clearItemOnCloseState
+function NoLootSubOptions:GetAutoOpenGuiState()
+  return self.db.profile.autoOpenGui
 end
 
-function NoLootSubOptions:SetClearItemOnCloseState(info, value)
+function NoLootSubOptions:SetAutoOpenGuiState(info, value)
   if value ~= "" then
-    self.db.profile.clearItemOnCloseState = value
+    self.db.profile.autoOpenGui = value
   end
 end
