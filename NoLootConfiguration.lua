@@ -7,7 +7,7 @@ local defaults = {
   profile = {
     lootDistributionList = {},
     lootHistory = {},
-    clearItemOnCloseState = false
+    autoOpenGui = true
   },
 }
 
@@ -31,6 +31,14 @@ function NoLootConfiguration:OnInitialize()
   self:RegisterChatCommand("noloot", "SlashCommand")
   self:RegisterChatCommand("cum", "SlashCommand")
   self:RegisterChatCommand("debug", "debug")
+
+  -- Run any cleanup or update requirements needed here for future version updates
+  local shouldRunConfigUpdate = self.db.profile.versionUpdate ~= NoLootVersion
+  if shouldRunConfigUpdate then
+    self.db.profile.clearItemOnCloseState = nil
+    self.db.profile.versionUpdate = NoLootVersion
+  end
+
 end
 
 function NoLootConfiguration:debug(arg)

@@ -1,7 +1,7 @@
 ## Interface: 30401
 ## Title: No Loot
 ## Notes: Loot distribution helper
-## Version: 0.1.1
+## Version: 0.2.0
 ## SavedVariables: NoLootDB
 
 Libs\LibStub\LibStub.lua

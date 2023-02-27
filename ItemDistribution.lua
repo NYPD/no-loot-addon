@@ -13,6 +13,10 @@ end
 
 function ItemDistribution:CHAT_MSG_LOOT(eventName, text, playerName)
 
+  if self.db.profile.autoOpenGui == false then
+    return
+  end
+
   --If player didn't pick up loot, exit. Apparently playerName is not populated..
   if text:sub(1,3) ~= "You" then return end
   --If no Active loot list, returns
@@ -185,17 +189,18 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
   end)
 
   --------------------------------- Loot Name ----------------------------------
+  local title = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+  title:SetPoint("TOPLEFT", 7, -10)
+
+  local frameTitle = lootName
+  local lootNameStringLength = string.len(frameTitle)
+  if lootNameStringLength > 15 then
+    frameTitle = string.sub(frameTitle, 1, 13) .. "..."
+  end
   if playerNamesCount ~= 0 then
-    local title = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 7, -10)
-
-    local frameTitle = lootName
-    local lootNameStringLength = string.len(frameTitle)
-    if lootNameStringLength > 15 then
-      frameTitle = string.sub(frameTitle, 1, 13) .. "..."
-    end
-
     title:SetText(frameTitle .. " [Prio: " .. priorityLevel .. "]")
+  else
+    title:SetText(frameTitle)
   end
 
   -------------------------------- Close button --------------------------------
@@ -204,7 +209,7 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
   closeButton:SetScript("OnClick", function()
     mainFrame:Hide()
     -- Save the item the user did not select a player for it (if enabled in options)
-    if playerNamesCount > 0 and not ItemDistribution.db.profile.clearItemOnCloseState then
+    if playerNamesCount > 0 then
       table.insert(ItemDistribution.itemsToDistribute, lootNameOrLink)
     end
     ItemDistribution.isOpen = false
@@ -254,21 +259,51 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
 
   -------------------------------- Player Button -------------------------------
   if playerNamesCount == 0 then
-    local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-    openRollString:SetPoint("TOP", 25, -40)
-    openRollString:SetText("Open Roll!")
+    -- local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    -- openRollString:SetPoint("TOP", 25, -40)
+    -- openRollString:SetText("Open Roll!")
+
+    local openRollButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+    openRollButton:SetPoint("TOP", mainFrame, 25, -40)
+    openRollButton:SetSize(100, 20)
+    openRollButton:SetText("Open Roll!")
+    openRollButton:SetScript("OnClick", function(self, button)
+      mainFrame:Hide()
+      ItemDistribution.isOpen = false
+
+      local stillItemsToDistribute = table.getn(ItemDistribution.itemsToDistribute) > 0
+      if stillItemsToDistribute then
+        ItemDistribution:manualProcess(table.remove(ItemDistribution.itemsToDistribute, 1))
+      end
+    end)
+
     mainFrame:SetHeight(85)
   else
     local yPosition = -30
 
     for _, playerName in ipairs(playerNames) do
 
-      local isClassSpecificLoot = playerName:sub(1, 1) == "["
+      local isSpecialLootCondition = playerName:sub(1, 1) == "["
 
-      if isClassSpecificLoot then
-        local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-        openRollString:SetPoint("TOP", 25, yPosition)
-        openRollString:SetText(playerName)
+      if isSpecialLootCondition then
+        -- local openRollString = mainFrame:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+        -- openRollString:SetPoint("TOP", 25, yPosition)
+        -- openRollString:SetText(playerName)
+
+        local specialLootPlayerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+        specialLootPlayerButton:SetPoint("TOP", mainFrame, 25, yPosition)
+        specialLootPlayerButton:SetSize(100, 20)
+        specialLootPlayerButton:SetText(playerName)
+        specialLootPlayerButton:SetScript("OnClick", function(self, button)
+          mainFrame:Hide()
+          ItemDistribution.isOpen = false
+
+          local stillItemsToDistribute = table.getn(ItemDistribution.itemsToDistribute) > 0
+          if stillItemsToDistribute then
+            ItemDistribution:manualProcess(table.remove(ItemDistribution.itemsToDistribute, 1))
+          end
+        end)
+
       else
 
         local playerButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
@@ -332,7 +367,7 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
 
   --Check to see if there are lower priorities
   local hasLowerPrios = NoLootUtil:isThereMorePriorities(self.db, lootName, priorityLevel + 1, true)
-  if hasLowerPrios then
+  if hasLowerPrios or playerNamesCount ~= 0 then
     local nextPrioButton = CreateFrame("Button", "nextPrioButton", mainFrame)
     nextPrioButton:SetPoint("BOTTOMRIGHT", nextXOffset, 5)
     nextPrioButton:SetSize(32, 32)
@@ -352,7 +387,7 @@ function ItemDistribution:openItemChooser(lootNameOrLink, playerNames, priorityL
     end)
   end
 
-  if hasHigherPrios or hasLowerPrios then
+  if hasHigherPrios or hasLowerPrios or playerNamesCount ~= 0 then
     mainFrame:SetHeight(mainFrame:GetHeight() + 32)
   end
 

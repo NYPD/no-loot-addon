@@ -1,2 +1,2 @@
-NoLootVersion = "v0.1.1"
+NoLootVersion = "v0.2.0"
 CurrentPlayerName = UnitName("player");
